@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>客室一覧 - Tomario Hotel</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="/index.html" class="logo">Tomario Hotel</a>
+            <div id="nav-auth"></div>
+        </nav>
+    </header>
+    <main>
+        <div class="container">
+            <h2>客室一覧</h2>
+            <form class="search-form inline" id="search-form">
+                <div class="form-group">
+                    <label for="check_in">チェックイン</label>
+                    <input type="date" id="check_in">
+                </div>
+                <div class="form-group">
+                    <label for="check_out">チェックアウト</label>
+                    <input type="date" id="check_out">
+                </div>
+                <button type="submit" class="btn">検索</button>
+                <a href="/rooms.html" class="btn btn-secondary">リセット</a>
+            </form>
+            <p id="search-result" class="search-result"></p>
+            <div id="rooms-grid" class="rooms-grid"></div>
+        </div>
+    </main>
+    <footer><p>&copy; 2024 Tomario Hotel. All rights reserved.</p></footer>
+    <script src="/js/api.js"></script>
+    <script src="/js/main.js"></script>
+    <script>
+        renderNav();
+
+        const params = getParams();
+        const checkIn = params.check_in || '';
+        const checkOut = params.check_out || '';
+
+        if (checkIn) document.getElementById('check_in').value = checkIn;
+        if (checkOut) document.getElementById('check_out').value = checkOut;
+
+        document.getElementById('search-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const ci = document.getElementById('check_in').value;
+            const co = document.getElementById('check_out').value;
+            window.location.href = `/rooms.html?check_in=${ci}&check_out=${co}`;
+        });
+
+        (async () => {
+            const query = checkIn && checkOut ? `?check_in=${checkIn}&check_out=${checkOut}` : '';
+            const data = await apiRequest('GET', `/rooms${query}`);
+            const grid = document.getElementById('rooms-grid');
+
+            if (checkIn && checkOut) {
+                document.getElementById('search-result').textContent =
+                    `${checkIn} 〜 ${checkOut} の空き部屋：${data.rooms.length}件`;
+            }
+
+            if (data.rooms.length === 0) {
+                grid.innerHTML = '<p>空き部屋がありません。</p>';
+                return;
+            }
+
+            grid.innerHTML = data.rooms.map(room => `
+                <div class="room-card">
+                    <div class="room-info">
+                        <h3>${room.room_type}（${room.room_number}号室）</h3>
+                        <p>定員：${room.capacity}名</p>
+                        <p class="price">¥${room.price_per_night.toLocaleString()} / 泊</p>
+                        <p>${room.description || ''}</p>
+                        <a href="/room_detail.html?room_id=${room.id}&check_in=${checkIn}&check_out=${checkOut}" class="btn">詳細を見る</a>
+                    </div>
+                </div>
+            `).join('');
+        })();
+    </script>
+</body>
+</html>

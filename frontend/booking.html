@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>予約 - Tomario Hotel</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="/index.html" class="logo">Tomario Hotel</a>
+            <div id="nav-auth"></div>
+        </nav>
+    </header>
+    <main>
+        <div class="container">
+            <h2>予約フォーム</h2>
+            <p id="error-msg" class="error-msg"></p>
+            <div id="booking-summary" class="booking-summary"></div>
+            <form class="auth-form" id="booking-form">
+                <div class="form-group">
+                    <label for="check_in">チェックイン</label>
+                    <input type="date" id="check_in" required>
+                </div>
+                <div class="form-group">
+                    <label for="check_out">チェックアウト</label>
+                    <input type="date" id="check_out" required>
+                </div>
+                <p>合計金額：<strong id="total-price">-</strong></p>
+                <button type="submit" class="btn">予約を確定する</button>
+            </form>
+        </div>
+    </main>
+    <footer><p>&copy; 2024 Tomario Hotel. All rights reserved.</p></footer>
+    <script src="/js/api.js"></script>
+    <script src="/js/main.js"></script>
+    <script>
+        renderNav();
+
+        const params = getParams();
+        const roomId = params.room_id;
+        const checkIn = params.check_in || '';
+        const checkOut = params.check_out || '';
+        let pricePerNight = 0;
+
+        if (checkIn) document.getElementById('check_in').value = checkIn;
+        if (checkOut) document.getElementById('check_out').value = checkOut;
+
+        function updateTotal() {
+            const ci = document.getElementById('check_in').value;
+            const co = document.getElementById('check_out').value;
+            if (ci && co) {
+                const nights = (new Date(co) - new Date(ci)) / 86400000;
+                document.getElementById('total-price').textContent =
+                    nights > 0 ? `¥${(pricePerNight * nights).toLocaleString()}` : '-';
+            }
+        }
+
+        document.getElementById('check_in').addEventListener('change', updateTotal);
+        document.getElementById('check_out').addEventListener('change', updateTotal);
+
+        (async () => {
+            const user = await requireAuth();
+            if (!user) return;
+
+            const data = await apiRequest('GET', `/rooms/${roomId}`);
+            const room = data.room;
+            pricePerNight = room.price_per_night;
+
+            document.getElementById('booking-summary').innerHTML = `
+                <h3>${room.room_type}（${room.room_number}号室）</h3>
+                <p>¥${room.price_per_night.toLocaleString()} / 泊</p>
+            `;
+            updateTotal();
+        })();
+
+        document.getElementById('booking-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            try {
+                await apiRequest('POST', '/bookings', {
+                    room_id: parseInt(roomId),
+                    check_in: document.getElementById('check_in').value,
+                    check_out: document.getElementById('check_out').value,
+                });
+                window.location.href = '/my_bookings.html';
+            } catch (err) {
+                showError(err.message);
+            }
+        });
+    </script>
+</body>
+</html>

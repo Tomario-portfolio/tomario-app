@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>客室詳細 - Tomario Hotel</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="/index.html" class="logo">Tomario Hotel</a>
+            <div id="nav-auth"></div>
+        </nav>
+    </header>
+    <main>
+        <div class="container">
+            <a id="back-link" href="/rooms.html">&larr; 客室一覧に戻る</a>
+            <div id="room-detail" class="room-detail"></div>
+        </div>
+    </main>
+    <footer><p>&copy; 2024 Tomario Hotel. All rights reserved.</p></footer>
+    <script src="/js/api.js"></script>
+    <script>
+        renderNav();
+
+        const params = getParams();
+        const roomId = params.room_id;
+        const checkIn = params.check_in || '';
+        const checkOut = params.check_out || '';
+
+        document.getElementById('back-link').href =
+            `/rooms.html?check_in=${checkIn}&check_out=${checkOut}`;
+
+        (async () => {
+            const data = await apiRequest('GET', `/rooms/${roomId}`);
+            const room = data.room;
+            document.title = `${room.room_type}（${room.room_number}号室）- Tomario Hotel`;
+            document.getElementById('room-detail').innerHTML = `
+                <h2>${room.room_type}（${room.room_number}号室）</h2>
+                <table class="detail-table">
+                    <tr><th>定員</th><td>${room.capacity}名</td></tr>
+                    <tr><th>料金</th><td>¥${room.price_per_night.toLocaleString()} / 泊</td></tr>
+                    <tr><th>説明</th><td>${room.description || '-'}</td></tr>
+                </table>
+                <a href="/booking.html?room_id=${room.id}&check_in=${checkIn}&check_out=${checkOut}" class="btn">この部屋を予約する</a>
+            `;
+        })();
+    </script>
+</body>
+</html>

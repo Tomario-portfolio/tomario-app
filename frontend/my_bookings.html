@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>予約確認 - Tomario Hotel</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="/index.html" class="logo">Tomario Hotel</a>
+            <div id="nav-auth"></div>
+        </nav>
+    </header>
+    <main>
+        <div class="container">
+            <h2>予約確認</h2>
+            <p id="error-msg" class="error-msg"></p>
+            <div id="bookings-content"></div>
+        </div>
+    </main>
+    <footer><p>&copy; 2024 Tomario Hotel. All rights reserved.</p></footer>
+    <script src="/js/api.js"></script>
+    <script>
+        renderNav();
+
+        async function cancelBooking(bookingId) {
+            if (!confirm('予約をキャンセルしますか？')) return;
+            try {
+                await apiRequest('POST', `/bookings/${bookingId}/cancel`);
+                location.reload();
+            } catch (err) {
+                showError(err.message);
+            }
+        }
+
+        (async () => {
+            const user = await requireAuth();
+            if (!user) return;
+
+            const data = await apiRequest('GET', '/bookings');
+            const el = document.getElementById('bookings-content');
+
+            if (data.bookings.length === 0) {
+                el.innerHTML = `
+                    <p>予約はありません。</p>
+                    <a href="/rooms.html" class="btn" style="margin-top:1rem">客室を探す</a>
+                `;
+                return;
+            }
+
+            el.innerHTML = `
+                <table class="bookings-table">
+                    <thead>
+                        <tr>
+                            <th>予約番号</th>
+                            <th>部屋</th>
+                            <th>チェックイン</th>
+                            <th>チェックアウト</th>
+                            <th>合計金額</th>
+                            <th>ステータス</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${data.bookings.map(b => `
+                            <tr class="${b.status === 'cancelled' ? 'cancelled' : ''}">
+                                <td>#${b.id}</td>
+                                <td>${b.room.room_type}（${b.room.room_number}号室）</td>
+                                <td>${b.check_in_date}</td>
+                                <td>${b.check_out_date}</td>
+                                <td>¥${b.total_price.toLocaleString()}</td>
+                                <td>${b.status === 'confirmed' ? '確定' : 'キャンセル済'}</td>
+                                <td>
+                                    ${b.status === 'confirmed'
+                                        ? `<button class="btn btn-danger" onclick="cancelBooking(${b.id})">キャンセル</button>`
+                                        : ''}
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        })();
+    </script>
+</body>
+</html>

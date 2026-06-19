@@ -1,8 +1,9 @@
 import os
 from datetime import date
-from flask import Flask, render_template, redirect, url_for, request, flash
+from flask import Flask, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
+from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
 
@@ -15,11 +16,13 @@ app.config['SQLALCHEMY_DATABASE_URI'] = (
     f"@{os.environ.get('DB_HOST')}:{os.environ.get('DB_PORT', '3306')}/{os.environ.get('DB_NAME')}"
 )
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SESSION_COOKIE_SECURE'] = False
+
+CORS(app, supports_credentials=True)
 
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
-login_manager.login_view = 'login'
-login_manager.login_message = 'ログインしてください。'
 
 
 class User(UserMixin, db.Model):
@@ -36,6 +39,9 @@ class User(UserMixin, db.Model):
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
 
+    def to_dict(self):
+        return {'id': self.id, 'username': self.username, 'email': self.email}
+
 
 class Room(db.Model):
     __tablename__ = 'rooms'
@@ -46,7 +52,17 @@ class Room(db.Model):
     capacity = db.Column(db.Integer, nullable=False)
     description = db.Column(db.Text)
     image_url = db.Column(db.String(255))
-    bookings = db.relationship('Booking', backref='room', lazy=True)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'room_number': self.room_number,
+            'room_type': self.room_type,
+            'price_per_night': float(self.price_per_night),
+            'capacity': self.capacity,
+            'description': self.description,
+            'image_url': self.image_url,
+        }
 
 
 class Booking(db.Model):
@@ -60,63 +76,102 @@ class Booking(db.Model):
     status = db.Column(db.String(20), nullable=False, default='confirmed')
     created_at = db.Column(db.DateTime, server_default=db.func.now())
 
+    def to_dict(self):
+        room = db.session.get(Room, self.room_id)
+        return {
+            'id': self.id,
+            'room': room.to_dict() if room else None,
+            'check_in_date': self.check_in_date.isoformat(),
+            'check_out_date': self.check_out_date.isoformat(),
+            'total_price': float(self.total_price),
+            'status': self.status,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
+
 
 @login_manager.user_loader
 def load_user(user_id):
     return db.session.get(User, int(user_id))
 
 
-@app.route('/')
-def index():
-    return render_template('index.html')
+@login_manager.unauthorized_handler
+def unauthorized():
+    return jsonify({'error': 'ログインが必要です'}), 401
 
 
-@app.route('/register', methods=['GET', 'POST'])
+# ------------------------------------------------------------
+# Health Check
+# ------------------------------------------------------------
+
+@app.route('/health')
+def health():
+    return jsonify({'status': 'ok'})
+
+
+# ------------------------------------------------------------
+# Auth
+# ------------------------------------------------------------
+
+@app.route('/api/auth/register', methods=['POST'])
 def register():
-    if current_user.is_authenticated:
-        return redirect(url_for('index'))
-    if request.method == 'POST':
-        username = request.form['username']
-        email = request.form['email']
-        password = request.form['password']
-        if User.query.filter_by(email=email).first():
-            flash('そのメールアドレスは既に登録されています。')
-            return redirect(url_for('register'))
-        if User.query.filter_by(username=username).first():
-            flash('そのユーザー名は既に使用されています。')
-            return redirect(url_for('register'))
-        user = User(username=username, email=email)
-        user.set_password(password)
-        db.session.add(user)
-        db.session.commit()
-        flash('登録が完了しました。ログインしてください。')
-        return redirect(url_for('login'))
-    return render_template('register.html')
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'リクエストが不正です'}), 400
+
+    username = data.get('username', '').strip()
+    email = data.get('email', '').strip()
+    password = data.get('password', '')
+
+    if not username or not email or not password:
+        return jsonify({'error': '全項目を入力してください'}), 400
+    if User.query.filter_by(email=email).first():
+        return jsonify({'error': 'そのメールアドレスは既に登録されています'}), 400
+    if User.query.filter_by(username=username).first():
+        return jsonify({'error': 'そのユーザー名は既に使用されています'}), 400
+
+    user = User(username=username, email=email)
+    user.set_password(password)
+    db.session.add(user)
+    db.session.commit()
+    return jsonify({'message': '登録が完了しました'}), 201
 
 
-@app.route('/login', methods=['GET', 'POST'])
+@app.route('/api/auth/login', methods=['POST'])
 def login():
-    if current_user.is_authenticated:
-        return redirect(url_for('index'))
-    if request.method == 'POST':
-        email = request.form['email']
-        password = request.form['password']
-        user = User.query.filter_by(email=email).first()
-        if user and user.check_password(password):
-            login_user(user)
-            return redirect(url_for('index'))
-        flash('メールアドレスまたはパスワードが正しくありません。')
-    return render_template('login.html')
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'リクエストが不正です'}), 400
+
+    email = data.get('email', '').strip()
+    password = data.get('password', '')
+    user = User.query.filter_by(email=email).first()
+
+    if not user or not user.check_password(password):
+        return jsonify({'error': 'メールアドレスまたはパスワードが正しくありません'}), 401
+
+    login_user(user)
+    return jsonify({'user': user.to_dict()})
 
 
-@app.route('/logout')
+@app.route('/api/auth/logout', methods=['POST'])
 @login_required
 def logout():
     logout_user()
-    return redirect(url_for('index'))
+    return jsonify({'message': 'ログアウトしました'})
 
 
-@app.route('/rooms')
+@app.route('/api/auth/me')
+def me():
+    if current_user.is_authenticated:
+        return jsonify({'user': current_user.to_dict()})
+    return jsonify({'error': '未ログイン'}), 401
+
+
+# ------------------------------------------------------------
+# Rooms
+# ------------------------------------------------------------
+
+@app.route('/api/rooms')
 def rooms():
     check_in = request.args.get('check_in')
     check_out = request.args.get('check_out')
@@ -132,82 +187,84 @@ def rooms():
         available_rooms = Room.query.filter(~Room.id.in_(booked_room_ids)).all()
     else:
         available_rooms = Room.query.all()
-        check_in = ''
-        check_out = ''
 
-    return render_template('rooms.html', rooms=available_rooms, check_in=check_in, check_out=check_out)
+    return jsonify({'rooms': [r.to_dict() for r in available_rooms]})
 
 
-@app.route('/rooms/<int:room_id>')
+@app.route('/api/rooms/<int:room_id>')
 def room_detail(room_id):
     room = db.get_or_404(Room, room_id)
-    check_in = request.args.get('check_in', '')
-    check_out = request.args.get('check_out', '')
-    return render_template('room_detail.html', room=room, check_in=check_in, check_out=check_out)
+    return jsonify({'room': room.to_dict()})
 
 
-@app.route('/booking/<int:room_id>', methods=['GET', 'POST'])
+# ------------------------------------------------------------
+# Bookings
+# ------------------------------------------------------------
+
+@app.route('/api/bookings', methods=['GET'])
 @login_required
-def booking(room_id):
-    room = db.get_or_404(Room, room_id)
-    if request.method == 'POST':
-        check_in = date.fromisoformat(request.form['check_in'])
-        check_out = date.fromisoformat(request.form['check_out'])
-
-        if check_in >= check_out:
-            flash('チェックアウト日はチェックイン日より後にしてください。')
-            return redirect(url_for('booking', room_id=room_id))
-
-        conflict = Booking.query.filter(
-            Booking.room_id == room_id,
-            Booking.status == 'confirmed',
-            Booking.check_in_date < check_out,
-            Booking.check_out_date > check_in
-        ).first()
-        if conflict:
-            flash('その期間は既に予約が入っています。')
-            return redirect(url_for('booking', room_id=room_id))
-
-        nights = (check_out - check_in).days
-        total_price = float(room.price_per_night) * nights
-        new_booking = Booking(
-            user_id=current_user.id,
-            room_id=room_id,
-            check_in_date=check_in,
-            check_out_date=check_out,
-            total_price=total_price
-        )
-        db.session.add(new_booking)
-        db.session.commit()
-        flash('予約が完了しました。')
-        return redirect(url_for('my_bookings'))
-
-    check_in = request.args.get('check_in', '')
-    check_out = request.args.get('check_out', '')
-    return render_template('booking.html', room=room, check_in=check_in, check_out=check_out)
-
-
-@app.route('/my_bookings')
-@login_required
-def my_bookings():
+def get_bookings():
     bookings = Booking.query.filter_by(user_id=current_user.id).order_by(Booking.created_at.desc()).all()
-    return render_template('my_bookings.html', bookings=bookings)
+    return jsonify({'bookings': [b.to_dict() for b in bookings]})
 
 
-@app.route('/cancel/<int:booking_id>', methods=['POST'])
+@app.route('/api/bookings', methods=['POST'])
+@login_required
+def create_booking():
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'リクエストが不正です'}), 400
+
+    room_id = data.get('room_id')
+    check_in = data.get('check_in')
+    check_out = data.get('check_out')
+
+    if not room_id or not check_in or not check_out:
+        return jsonify({'error': '全項目を入力してください'}), 400
+
+    room = db.get_or_404(Room, room_id)
+    check_in_date = date.fromisoformat(check_in)
+    check_out_date = date.fromisoformat(check_out)
+
+    if check_in_date >= check_out_date:
+        return jsonify({'error': 'チェックアウト日はチェックイン日より後にしてください'}), 400
+
+    conflict = Booking.query.filter(
+        Booking.room_id == room_id,
+        Booking.status == 'confirmed',
+        Booking.check_in_date < check_out_date,
+        Booking.check_out_date > check_in_date
+    ).first()
+    if conflict:
+        return jsonify({'error': 'その期間は既に予約が入っています'}), 400
+
+    nights = (check_out_date - check_in_date).days
+    total_price = float(room.price_per_night) * nights
+    booking = Booking(
+        user_id=current_user.id,
+        room_id=room_id,
+        check_in_date=check_in_date,
+        check_out_date=check_out_date,
+        total_price=total_price
+    )
+    db.session.add(booking)
+    db.session.commit()
+    return jsonify({'booking': booking.to_dict()}), 201
+
+
+@app.route('/api/bookings/<int:booking_id>/cancel', methods=['POST'])
 @login_required
 def cancel_booking(booking_id):
     booking = db.get_or_404(Booking, booking_id)
+
     if booking.user_id != current_user.id:
-        flash('権限がありません。')
-        return redirect(url_for('my_bookings'))
+        return jsonify({'error': '権限がありません'}), 403
     if booking.check_in_date <= date.today():
-        flash('チェックイン日以降はキャンセルできません。')
-        return redirect(url_for('my_bookings'))
+        return jsonify({'error': 'チェックイン日以降はキャンセルできません'}), 400
+
     booking.status = 'cancelled'
     db.session.commit()
-    flash('予約をキャンセルしました。')
-    return redirect(url_for('my_bookings'))
+    return jsonify({'message': '予約をキャンセルしました'})
 
 
 if __name__ == '__main__':
