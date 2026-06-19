@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% block title %}予約確認 - Tomario Hotel{% endblock %}
+{% block content %}
+<div class="container">
+    <h2>予約確認</h2>
+    {% if bookings %}
+    <table class="bookings-table">
+        <thead>
+            <tr>
+                <th>予約番号</th>
+                <th>部屋</th>
+                <th>チェックイン</th>
+                <th>チェックアウト</th>
+                <th>合計金額</th>
+                <th>ステータス</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for booking in bookings %}
+            <tr class="{{ 'cancelled' if booking.status == 'cancelled' else '' }}">
+                <td>#{{ booking.id }}</td>
+                <td>{{ booking.room.room_type }}（{{ booking.room.room_number }}号室）</td>
+                <td>{{ booking.check_in_date }}</td>
+                <td>{{ booking.check_out_date }}</td>
+                <td>¥{{ "{:,.0f}".format(booking.total_price) }}</td>
+                <td>{{ '確定' if booking.status == 'confirmed' else 'キャンセル済' }}</td>
+                <td>
+                    {% if booking.status == 'confirmed' %}
+                    <form method="post" action="{{ url_for('cancel_booking', booking_id=booking.id) }}"
+                          onsubmit="return confirm('予約をキャンセルしますか？')">
+                        <button type="submit" class="btn btn-danger">キャンセル</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>予約はありません。</p>
+    <a href="{{ url_for('rooms') }}" class="btn">客室を探す</a>
+    {% endif %}
+</div>
+{% endblock %}
