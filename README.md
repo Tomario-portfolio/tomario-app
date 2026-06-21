@@ -1,28 +1,31 @@
-# Tomario Hotel - アプリケーション
+# tomario-app
 
-ホテル予約システム「Tomario Hotel」のバックエンド・フロントエンドアプリケーションです。  
-インフラ（EC2 / ALB / RDS）は [tomario-infra](https://github.com/Tomario-portfolio/tomario-infra) リポジトリで管理しています。
+ホテル予約システム「Tomario Hotel」のバックエンド（Flask REST API）とフロントエンド（静的 HTML）のリポジトリです。
 
----
+インフラ（EC2 / ALB / RDS / CloudFront / S3）は [tomario-infra](https://github.com/Tomario-portfolio/tomario-infra) で管理しています。
 
 ## 技術スタック
 
 | レイヤー | 技術 |
 |---|---|
-| バックエンド | Python / Flask |
-| フロントエンド | HTML / CSS / JavaScript（Jinja2 テンプレート） |
+| バックエンド | Python / Flask（REST API） |
+| フロントエンド | HTML / CSS / JavaScript（静的ファイル） |
 | データベース | MySQL 8.0（AWS RDS） |
-| 認証 | Flask-Login（セッション管理） |
+| 認証 | Flask-Login（セッション Cookie） |
 
 ---
 
-## 機能一覧
+## アーキテクチャ
 
-- ユーザー登録 / ログイン / ログアウト
-- 客室一覧・詳細表示
-- チェックイン・アウト日による空き部屋検索
-- 予約登録（宿泊日数に応じた合計金額自動計算）
-- 予約確認・キャンセル
+```
+ユーザー
+  ↓ HTTPS
+CloudFront
+  ├── /*     → S3（静的ファイル: HTML/CSS/JS）
+  └── /api/* → ALB → EC2（Flask API）→ RDS（MySQL）
+```
+
+フロントエンドと API は CloudFront で同一オリジンとして配信するため、クロスオリジン問題なしにセッション Cookie が機能します。
 
 ---
 
@@ -30,40 +33,60 @@
 
 ```
 tomario-app/
-├── app.py                  # Flask アプリ本体（ルーティング・DB モデル・ビジネスロジック）
-├── requirements.txt        # Python 依存パッケージ
-├── schema.sql              # DB テーブル定義・初期データ投入
-├── .env.example            # 環境変数テンプレート（実際の .env は Git 管理外）
-├── .gitignore
-├── templates/              # Jinja2 HTML テンプレート
-│   ├── base.html           # 共通レイアウト（ヘッダー・フッター・フラッシュメッセージ）
-│   ├── index.html          # トップページ（空き部屋検索フォーム）
-│   ├── login.html          # ログインフォーム
-│   ├── register.html       # ユーザー登録フォーム
-│   ├── rooms.html          # 客室一覧・空き部屋検索結果
-│   ├── room_detail.html    # 客室詳細
-│   ├── booking.html        # 予約フォーム（合計金額リアルタイム計算）
-│   └── my_bookings.html    # 予約確認・キャンセル
-└── static/
+├── app.py              # Flask REST API（ルーティング・DBモデル・ビジネスロジック）
+├── requirements.txt    # Python 依存パッケージ
+├── schema.sql          # DB テーブル定義・初期データ
+└── frontend/           # S3 にアップロードする静的ファイル
+    ├── index.html          # トップページ
+    ├── login.html          # ログイン
+    ├── register.html       # ユーザー登録
+    ├── rooms.html          # 客室一覧・空き部屋検索
+    ├── room_detail.html    # 客室詳細
+    ├── booking.html        # 予約フォーム
+    ├── my_bookings.html    # 予約確認・キャンセル
     ├── css/
-    │   └── style.css       # 全ページ共通スタイル
+    │   └── style.css
     └── js/
-        └── main.js         # 日付入力バリデーション（過去日・逆順の防止）
+        ├── api.js      # API 通信・認証ユーティリティ
+        └── main.js     # 各ページの UI ロジック
 ```
+
+---
+
+## API エンドポイント
+
+| メソッド | パス | 説明 |
+|---|---|---|
+| GET | `/health` | ヘルスチェック（ALB 用） |
+| POST | `/api/auth/login` | ログイン |
+| POST | `/api/auth/logout` | ログアウト |
+| POST | `/api/auth/register` | ユーザー登録 |
+| GET | `/api/auth/me` | ログイン中ユーザー情報取得 |
+| GET | `/api/rooms` | 客室一覧（`?check_in=&check_out=` で空き部屋検索） |
+| GET | `/api/rooms/<id>` | 客室詳細 |
+| POST | `/api/bookings` | 予約作成 |
+| GET | `/api/bookings` | 自分の予約一覧 |
+| DELETE | `/api/bookings/<id>` | 予約キャンセル |
+
+---
+
+## 機能
+
+- ユーザー登録 / ログイン / ログアウト
+- 客室一覧・詳細表示（客室画像付き）
+- チェックイン・アウト日による空き部屋検索
+- 予約作成（宿泊日数に応じた合計金額自動計算）
+- 予約確認・キャンセル
 
 ---
 
 ## 環境変数
 
-`.env.example` をコピーして `.env` を作成し、各値を設定してください。
-
-```bash
-cp .env.example .env
-```
+EC2 上では `user_data` が自動生成します。ローカル実行時は `.env` を手動作成してください。
 
 | 変数名 | 説明 |
 |---|---|
-| `SECRET_KEY` | Flask セッション署名用キー（ランダムな文字列を設定） |
+| `SECRET_KEY` | Flask セッション署名用キー |
 | `DB_HOST` | RDS エンドポイント |
 | `DB_PORT` | DB ポート（デフォルト: 3306） |
 | `DB_NAME` | データベース名（`tomario`） |
@@ -72,65 +95,26 @@ cp .env.example .env
 
 ---
 
-## DB セットアップ
-
-RDS に接続して `schema.sql` を流します。
-
-```bash
-mysql -h <RDSエンドポイント> -u admin -p < schema.sql
-```
-
-`schema.sql` の内容：
-- `users` テーブル（ユーザー情報）
-- `rooms` テーブル（客室情報）
-- `bookings` テーブル（予約情報）
-- 客室サンプルデータ 5 件（シングル×2 / ダブル×2 / スイート×1）
-
----
-
 ## ローカル起動
 
 ```bash
-# 依存パッケージインストール
 pip install -r requirements.txt
-
-# 起動（ポート 8080）
 python app.py
+# → http://localhost:8080
 ```
 
-ブラウザで `http://localhost:8080` にアクセス。
-
----
-
-## EC2 デプロイ
+フロントエンドは `frontend/` を任意の HTTP サーバーで配信してください。
 
 ```bash
-# EC2 にログイン
-ssh -i <キーペア> ec2-user@<EC2のIP>
-
-# リポジトリをクローン
-git clone https://github.com/Tomario-portfolio/tomario-app.git
-cd tomario-app
-
-# パッケージインストール
-pip install -r requirements.txt
-
-# 環境変数設定
-cp .env.example .env
-vi .env  # 各値を入力
-
-# 起動
-python app.py
+cd frontend
+python3 -m http.server 3000
+# → http://localhost:3000
 ```
-
-ALB のターゲットグループがポート 8080 を向いているため、ALB の DNS 名でアクセスできます。
 
 ---
 
-## インフラ構成
+## フロントエンドのデプロイ（S3）
 
-インフラは別リポジトリ [tomario-infra](https://github.com/Tomario-portfolio/tomario-infra) で Terraform 管理しています。
-
-```
-Internet → ALB（ポート 80）→ EC2（ポート 8080）→ RDS MySQL
+```bash
+aws s3 sync frontend/ s3://<バケット名>/ --region ap-northeast-1
 ```
