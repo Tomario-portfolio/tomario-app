@@ -164,6 +164,20 @@ main {
 }
 .room-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.12); }
 
+.room-img {
+    width: 100%;
+    height: 200px;
+    object-fit: cover;
+}
+
+.room-detail-img {
+    width: 100%;
+    max-height: 420px;
+    object-fit: cover;
+    border-radius: 8px;
+    margin-bottom: 1.5rem;
+}
+
 .room-info { padding: 1.2rem; }
 .room-info h3 { margin-bottom: 0.5rem; }
 .room-info p { color: #666; font-size: 0.9rem; margin-bottom: 0.4rem; }

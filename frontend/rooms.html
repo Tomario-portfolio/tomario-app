@@ -69,6 +69,7 @@
 
             grid.innerHTML = data.rooms.map(room => `
                 <div class="room-card">
+                    <img src="${room.image_url || 'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=600&q=80'}" alt="${room.room_type}" class="room-img">
                     <div class="room-info">
                         <h3>${room.room_type}（${room.room_number}号室）</h3>
                         <p>定員：${room.capacity}名</p>
