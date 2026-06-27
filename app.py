@@ -267,5 +267,32 @@ def cancel_booking(booking_id):
     return jsonify({'message': '予約をキャンセルしました'})
 
 
+def seed_rooms():
+    if Room.query.count() == 0:
+        rooms = [
+            Room(room_number='101', room_type='シングル', price_per_night=8000, capacity=1,
+                 description='落ち着いた雰囲気のシングルルームです。',
+                 image_url='https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=800&q=80'),
+            Room(room_number='102', room_type='シングル', price_per_night=8000, capacity=1,
+                 description='落ち着いた雰囲気のシングルルームです。',
+                 image_url='https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=800&q=80'),
+            Room(room_number='201', room_type='ダブル', price_per_night=12000, capacity=2,
+                 description='ゆったりとしたダブルルームです。',
+                 image_url='https://images.unsplash.com/photo-1582719508461-905c673771fd?w=800&q=80'),
+            Room(room_number='202', room_type='ダブル', price_per_night=12000, capacity=2,
+                 description='ゆったりとしたダブルルームです。',
+                 image_url='https://images.unsplash.com/photo-1582719508461-905c673771fd?w=800&q=80'),
+            Room(room_number='301', room_type='スイート', price_per_night=25000, capacity=3,
+                 description='豪華なスイートルームです。特別なひとときをお過ごしください。',
+                 image_url='https://images.unsplash.com/photo-1578683010236-d716f9a3f461?w=800&q=80'),
+        ]
+        db.session.add_all(rooms)
+        db.session.commit()
+
+
+with app.app_context():
+    db.create_all()
+    seed_rooms()
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)
