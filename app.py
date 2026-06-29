@@ -262,9 +262,23 @@ def cancel_booking(booking_id):
     if booking.check_in_date <= date.today():
         return jsonify({'error': 'チェックイン日以降はキャンセルできません'}), 400
 
+    days_until_checkin = (booking.check_in_date - date.today()).days
+    if days_until_checkin >= 3:
+        fee_rate = 0
+    elif days_until_checkin == 2:
+        fee_rate = 0.3
+    else:
+        fee_rate = 0.5
+
+    cancellation_fee = round(float(booking.total_price) * fee_rate)
+
     booking.status = 'cancelled'
     db.session.commit()
-    return jsonify({'message': '予約をキャンセルしました'})
+    return jsonify({
+        'message': '予約をキャンセルしました',
+        'cancellation_fee': cancellation_fee,
+        'fee_rate': fee_rate
+    })
 
 
 def seed_rooms():
