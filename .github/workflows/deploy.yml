@@ -12,14 +12,13 @@ permissions:
 env:
   AWS_REGION: ap-northeast-1
   ECR_REPOSITORY: tomario-app
-  ECS_CLUSTER: tomario-dev-cluster
-  ECS_SERVICE: tomario-dev-service
-  CONTAINER_NAME: tomario-app
 
 jobs:
-  deploy:
-    name: Build and Deploy
+  build-and-push:
+    name: Build and Push Image
     runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.build.outputs.image }}
 
     steps:
       - name: Checkout
@@ -65,25 +64,59 @@ jobs:
 
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
+  deploy:
+    name: Deploy to ${{ matrix.env }}
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        env: [dev, staging]
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Check if ECS service exists
+        id: check-service
+        run: |
+          STATUS=$(aws ecs describe-services \
+            --cluster tomario-${{ matrix.env }}-cluster \
+            --services tomario-${{ matrix.env }}-service \
+            --query "services[0].status" \
+            --output text 2>/dev/null || echo "MISSING")
+          if [ "$STATUS" = "ACTIVE" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "tomario-${{ matrix.env }}-service is not ACTIVE (status: $STATUS). cost-stop中の可能性があるためデプロイをスキップします。"
+          fi
+
       - name: Download current task definition
+        if: steps.check-service.outputs.exists == 'true'
         run: |
           aws ecs describe-task-definition \
-            --task-definition tomario-dev-task \
+            --task-definition tomario-${{ matrix.env }}-task \
             --query taskDefinition \
             --output json > task-def.json
 
       - name: Update image in task definition
+        if: steps.check-service.outputs.exists == 'true'
         id: task-def
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
           task-definition: task-def.json
-          container-name: ${{ env.CONTAINER_NAME }}
-          image: ${{ steps.build.outputs.image }}
+          container-name: tomario-app
+          image: ${{ needs.build-and-push.outputs.image }}
 
       - name: Deploy to ECS
+        if: steps.check-service.outputs.exists == 'true'
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2
         with:
           task-definition: ${{ steps.task-def.outputs.task-definition }}
-          service: ${{ env.ECS_SERVICE }}
-          cluster: ${{ env.ECS_CLUSTER }}
+          service: tomario-${{ matrix.env }}-service
+          cluster: tomario-${{ matrix.env }}-cluster
           wait-for-service-stability: true
