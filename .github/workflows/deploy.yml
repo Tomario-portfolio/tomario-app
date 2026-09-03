@@ -19,6 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       image: ${{ steps.build.outputs.image }}
+      digest: ${{ steps.build.outputs.digest }}
 
     steps:
       - name: Checkout
@@ -63,6 +64,13 @@ jobs:
           fi
 
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+          DIGEST=$(aws ecr describe-images \
+            --repository-name $ECR_REPOSITORY \
+            --image-ids imageTag=$IMAGE_TAG \
+            --query 'imageDetails[0].imageDigest' \
+            --output text)
+          echo "digest=$DIGEST" >> $GITHUB_OUTPUT
 
   deploy:
     name: Deploy to ${{ matrix.env }}
@@ -119,4 +127,85 @@ jobs:
           task-definition: ${{ steps.task-def.outputs.task-definition }}
           service: tomario-${{ matrix.env }}-service
           cluster: tomario-${{ matrix.env }}-cluster
+          wait-for-service-stability: true
+
+  promote-to-production:
+    name: Promote to Production
+    needs: [build-and-push, deploy]
+    runs-on: ubuntu-latest
+    # GitHub Environment「prod」のRequired reviewersにより、ここで承認待ちになる
+    environment: prod
+    env:
+      NONPROD_REGISTRY_ID: "418295697340"
+      NONPROD_ECR_REPOSITORY: tomario-app
+      PROD_ECR_REPOSITORY: tomario-production-app
+
+    steps:
+      - name: Configure AWS credentials (production)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR (nonprod, source)
+        id: login-ecr-nonprod
+        uses: aws-actions/amazon-ecr-login@v2
+        with:
+          registries: ${{ env.NONPROD_REGISTRY_ID }}
+
+      - name: Login to ECR (production, destination)
+        id: login-ecr-prod
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Pull staging-verified image by digest, re-tag, push (no rebuild)
+        id: promote
+        run: |
+          SRC_IMAGE="${{ steps.login-ecr-nonprod.outputs.registry }}/${{ env.NONPROD_ECR_REPOSITORY }}@${{ needs.build-and-push.outputs.digest }}"
+          DST_IMAGE="${{ steps.login-ecr-prod.outputs.registry }}/${{ env.PROD_ECR_REPOSITORY }}:${{ github.sha }}"
+
+          docker pull "$SRC_IMAGE"
+          docker tag "$SRC_IMAGE" "$DST_IMAGE"
+          docker push "$DST_IMAGE"
+
+          echo "image=$DST_IMAGE" >> $GITHUB_OUTPUT
+
+      - name: Check if production ECS service exists
+        id: check-service
+        run: |
+          STATUS=$(aws ecs describe-services \
+            --cluster tomario-production-cluster \
+            --services tomario-production-service \
+            --query "services[0].status" \
+            --output text 2>/dev/null || echo "MISSING")
+          if [ "$STATUS" = "ACTIVE" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "tomario-production-service is not ACTIVE (status: $STATUS). cost-stop中の可能性があるためデプロイをスキップします。"
+          fi
+
+      - name: Download current production task definition
+        if: steps.check-service.outputs.exists == 'true'
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition tomario-production-task \
+            --query taskDefinition \
+            --output json > task-def.json
+
+      - name: Update image in task definition
+        if: steps.check-service.outputs.exists == 'true'
+        id: task-def
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-def.json
+          container-name: tomario-app
+          image: ${{ steps.promote.outputs.image }}
+
+      - name: Deploy to ECS (production)
+        if: steps.check-service.outputs.exists == 'true'
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.task-def.outputs.task-definition }}
+          service: tomario-production-service
+          cluster: tomario-production-cluster
           wait-for-service-stability: true
