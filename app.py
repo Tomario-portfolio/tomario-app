@@ -361,13 +361,13 @@ def seed_hotels_and_rooms():
     if Hotel.query.count() > 0:
         return
 
-    tokyo = Hotel(name='Tomario Hotel 東京', area='東京', address='東京都千代田区丸の内1-1-1',
+    tokyo = Hotel(name='丸の内グランドホテル', area='東京', address='東京都千代田区丸の内1-1-1',
                   description='都心の主要駅から徒歩圏内、ビジネスにも観光にも便利なホテルです。',
                   image_url='https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&q=80')
-    kyoto = Hotel(name='Tomario Hotel 京都', area='京都', address='京都府京都市東山区清水1-1-1',
+    kyoto = Hotel(name='京都東山旅館', area='京都', address='京都府京都市東山区清水1-1-1',
                   description='古都の風情を感じられる、落ち着いた雰囲気のホテルです。',
                   image_url='https://images.unsplash.com/photo-1545158535-c3f7168c28b6?w=800&q=80')
-    osaka = Hotel(name='Tomario Hotel 大阪', area='大阪', address='大阪府大阪市中央区難波1-1-1',
+    osaka = Hotel(name='なんばグランドホテル', area='大阪', address='大阪府大阪市中央区難波1-1-1',
                   description='繁華街に近く、食とショッピングを楽しむのに最適なホテルです。',
                   image_url='https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=800&q=80')
     db.session.add_all([tokyo, kyoto, osaka])
