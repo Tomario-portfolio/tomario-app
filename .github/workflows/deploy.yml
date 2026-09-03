@@ -163,7 +163,10 @@ jobs:
           SRC_IMAGE="${{ steps.login-ecr-nonprod.outputs.registry }}/${{ env.NONPROD_ECR_REPOSITORY }}@${{ needs.build-and-push.outputs.digest }}"
           DST_IMAGE="${{ steps.login-ecr-prod.outputs.registry }}/${{ env.PROD_ECR_REPOSITORY }}:${{ github.sha }}"
 
-          docker pull "$SRC_IMAGE"
+          # イメージはGraviton(ARM64)向けにビルドされておりamd64版が無いため、
+          # amd64ランナーのデフォルトpull(amd64を探しに行く)だと失敗する。明示的にarm64を指定する
+          # （production ECSタスクもruntime_platform=ARM64のため、そのまま使える）
+          docker pull --platform linux/arm64 "$SRC_IMAGE"
           docker tag "$SRC_IMAGE" "$DST_IMAGE"
           docker push "$DST_IMAGE"
 
