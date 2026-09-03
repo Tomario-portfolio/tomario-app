@@ -69,6 +69,7 @@
             pricePerNight = room.price_per_night;
 
             document.getElementById('booking-summary').innerHTML = `
+                <p class="hotel-breadcrumb">${room.hotel_name}</p>
                 <h3>${room.room_type}（${room.room_number}号室）</h3>
                 <p>¥${room.price_per_night.toLocaleString()} / 泊</p>
             `;

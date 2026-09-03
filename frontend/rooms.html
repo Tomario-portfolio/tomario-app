@@ -15,7 +15,8 @@
     </header>
     <main>
         <div class="container">
-            <h2>客室一覧</h2>
+            <a id="back-link" href="/hotels.html">&larr; ホテル一覧に戻る</a>
+            <h2 id="hotel-heading">客室一覧</h2>
             <form class="search-form inline" id="search-form">
                 <div class="form-group">
                     <label for="check_in">チェックイン</label>
@@ -26,7 +27,6 @@
                     <input type="date" id="check_out">
                 </div>
                 <button type="submit" class="btn">検索</button>
-                <a href="/rooms.html" class="btn btn-secondary">リセット</a>
             </form>
             <p id="search-result" class="search-result"></p>
             <div id="rooms-grid" class="rooms-grid"></div>
@@ -39,6 +39,7 @@
         renderNav();
 
         const params = getParams();
+        const hotelId = params.hotel_id;
         const checkIn = params.check_in || '';
         const checkOut = params.check_out || '';
 
@@ -49,12 +50,21 @@
             e.preventDefault();
             const ci = document.getElementById('check_in').value;
             const co = document.getElementById('check_out').value;
-            window.location.href = `/rooms.html?check_in=${ci}&check_out=${co}`;
+            window.location.href = `/rooms.html?hotel_id=${hotelId}&check_in=${ci}&check_out=${co}`;
         });
 
         (async () => {
-            const query = checkIn && checkOut ? `?check_in=${checkIn}&check_out=${checkOut}` : '';
-            const data = await apiRequest('GET', `/rooms${query}`);
+            if (!hotelId) {
+                window.location.href = '/hotels.html';
+                return;
+            }
+
+            const hotelData = await apiRequest('GET', `/hotels/${hotelId}`);
+            document.getElementById('hotel-heading').textContent = `${hotelData.hotel.name}の客室一覧`;
+            document.title = `${hotelData.hotel.name} - Tomario Hotel`;
+
+            const query = checkIn && checkOut ? `&check_in=${checkIn}&check_out=${checkOut}` : '';
+            const data = await apiRequest('GET', `/rooms?hotel_id=${hotelId}${query}`);
             const grid = document.getElementById('rooms-grid');
 
             if (checkIn && checkOut) {

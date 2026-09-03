@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ホテルを探す - Tomario Hotel</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <header>
+        <nav>
+            <a href="/index.html" class="logo">Tomario Hotel</a>
+            <div id="nav-auth"></div>
+        </nav>
+    </header>
+    <main>
+        <div class="container">
+            <h2>ホテルを探す</h2>
+            <form class="search-form inline" id="search-form">
+                <div class="form-group">
+                    <label for="area">エリア</label>
+                    <input type="text" id="area" placeholder="例：京都">
+                </div>
+                <div class="form-group">
+                    <label for="check_in">チェックイン</label>
+                    <input type="date" id="check_in">
+                </div>
+                <div class="form-group">
+                    <label for="check_out">チェックアウト</label>
+                    <input type="date" id="check_out">
+                </div>
+                <button type="submit" class="btn">検索</button>
+                <a href="/hotels.html" class="btn btn-secondary">リセット</a>
+            </form>
+            <p id="search-result" class="search-result"></p>
+            <div id="hotels-grid" class="rooms-grid"></div>
+        </div>
+    </main>
+    <footer><p>&copy; 2024 Tomario Hotel. All rights reserved.</p></footer>
+    <script src="/js/api.js"></script>
+    <script src="/js/main.js"></script>
+    <script>
+        renderNav();
+
+        const params = getParams();
+        const area = params.area || '';
+        const checkIn = params.check_in || '';
+        const checkOut = params.check_out || '';
+
+        if (area) document.getElementById('area').value = area;
+        if (checkIn) document.getElementById('check_in').value = checkIn;
+        if (checkOut) document.getElementById('check_out').value = checkOut;
+
+        document.getElementById('search-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const a = document.getElementById('area').value;
+            const ci = document.getElementById('check_in').value;
+            const co = document.getElementById('check_out').value;
+            window.location.href = `/hotels.html?area=${encodeURIComponent(a)}&check_in=${ci}&check_out=${co}`;
+        });
+
+        (async () => {
+            const query = new URLSearchParams();
+            if (area) query.set('area', area);
+            if (checkIn && checkOut) {
+                query.set('check_in', checkIn);
+                query.set('check_out', checkOut);
+            }
+            const qs = query.toString() ? `?${query.toString()}` : '';
+            const data = await apiRequest('GET', `/hotels${qs}`);
+            const grid = document.getElementById('hotels-grid');
+
+            if (checkIn && checkOut) {
+                document.getElementById('search-result').textContent =
+                    `${checkIn} 〜 ${checkOut} で検索：${data.hotels.length}件のホテル`;
+            }
+
+            if (data.hotels.length === 0) {
+                grid.innerHTML = '<p>条件に合うホテルが見つかりませんでした。</p>';
+                return;
+            }
+
+            grid.innerHTML = data.hotels.map(hotel => `
+                <div class="room-card">
+                    <img src="${hotel.image_url || 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=600&q=80'}" alt="${hotel.name}" class="room-img">
+                    <div class="room-info">
+                        <h3>${hotel.name}</h3>
+                        <p>エリア：${hotel.area}</p>
+                        <p>${hotel.description || ''}</p>
+                        ${hotel.min_price_per_night != null
+                            ? `<p class="price">¥${hotel.min_price_per_night.toLocaleString()}〜 / 泊（空室${hotel.available_room_count}件）</p>`
+                            : '<p class="price">空室なし</p>'}
+                        <a href="/rooms.html?hotel_id=${hotel.id}&check_in=${checkIn}&check_out=${checkOut}" class="btn">部屋を見る</a>
+                    </div>
+                </div>
+            `).join('');
+        })();
+    </script>
+</body>
+</html>
