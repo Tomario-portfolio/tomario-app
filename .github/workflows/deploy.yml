@@ -141,6 +141,9 @@ jobs:
       PROD_ECR_REPOSITORY: tomario-production-app
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Configure AWS credentials (production)
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -212,3 +215,42 @@ jobs:
           service: tomario-production-service
           cluster: tomario-production-cluster
           wait-for-service-stability: true
+
+      - name: Sync frontend to S3 (production)
+        run: |
+          aws s3 sync frontend/ s3://tomario-production-frontend/ --delete
+
+      - name: Invalidate CloudFront cache (production)
+        run: |
+          aws cloudfront create-invalidation --distribution-id E16RCKYF5065BQ --paths "/*"
+
+  deploy-frontend:
+    name: Deploy Frontend to ${{ matrix.env }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - env: dev
+            distribution_id: E31X0ZOPLPLQUU
+          - env: staging
+            distribution_id: E1XHUK5RP1RUM8
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # cost-stop中でも実行して問題ない（S3/CloudFrontはcost-stopの対象外で常に存在するため）
+      - name: Sync frontend to S3
+        run: |
+          aws s3 sync frontend/ s3://tomario-${{ matrix.env }}-frontend/ --delete
+
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation --distribution-id ${{ matrix.distribution_id }} --paths "/*"
