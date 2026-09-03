@@ -1,6 +1,6 @@
 # tomario-app
 
-ホテル予約システム「Tomario Hotel」のバックエンド（Flask REST API）とフロントエンド（静的 HTML）のリポジトリです。
+複数のホテルを横断予約できる予約システム「Tomario」のバックエンド（Flask REST API）とフロントエンド（静的 HTML）のリポジトリです。
 
 インフラ（EC2 / ALB / RDS / CloudFront / S3）は [tomario-infra](https://github.com/Tomario-portfolio/tomario-infra) で管理しています。
 

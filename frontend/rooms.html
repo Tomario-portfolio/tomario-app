@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>客室一覧 - Tomario Hotel</title>
+    <title>客室一覧 - Tomario</title>
     <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
     <header>
         <nav>
-            <a href="/index.html" class="logo">Tomario Hotel</a>
+            <a href="/index.html" class="logo">Tomario</a>
             <div id="nav-auth"></div>
         </nav>
     </header>
@@ -32,7 +32,7 @@
             <div id="rooms-grid" class="rooms-grid"></div>
         </div>
     </main>
-    <footer><p>&copy; 2024 Tomario Hotel. All rights reserved.</p></footer>
+    <footer><p>&copy; 2024 Tomario. All rights reserved.</p></footer>
     <script src="/js/api.js"></script>
     <script src="/js/main.js"></script>
     <script>
@@ -61,7 +61,7 @@
 
             const hotelData = await apiRequest('GET', `/hotels/${hotelId}`);
             document.getElementById('hotel-heading').textContent = `${hotelData.hotel.name}の客室一覧`;
-            document.title = `${hotelData.hotel.name} - Tomario Hotel`;
+            document.title = `${hotelData.hotel.name} - Tomario`;
 
             const query = checkIn && checkOut ? `&check_in=${checkIn}&check_out=${checkOut}` : '';
             const data = await apiRequest('GET', `/rooms?hotel_id=${hotelId}${query}`);
