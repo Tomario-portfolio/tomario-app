@@ -16,12 +16,16 @@
     <main>
         <section class="hero">
             <h1>Tomario Hotel へようこそ</h1>
-            <p>特別なひとときを、あなたに。</p>
-            <a href="/rooms.html" class="btn">客室を見る</a>
+            <p>全国のTomario Hotelから、特別なひとときを、あなたに。</p>
+            <a href="/hotels.html" class="btn">ホテルを見る</a>
         </section>
         <section class="search">
-            <h2>空き部屋を検索</h2>
+            <h2>ホテルを検索</h2>
             <form class="search-form" id="search-form">
+                <div class="form-group">
+                    <label for="area">エリア</label>
+                    <input type="text" id="area" placeholder="例：京都">
+                </div>
                 <div class="form-group">
                     <label for="check_in">チェックイン</label>
                     <input type="date" id="check_in" required>
@@ -41,9 +45,10 @@
         renderNav();
         document.getElementById('search-form').addEventListener('submit', (e) => {
             e.preventDefault();
+            const area = document.getElementById('area').value;
             const checkIn = document.getElementById('check_in').value;
             const checkOut = document.getElementById('check_out').value;
-            window.location.href = `/rooms.html?check_in=${checkIn}&check_out=${checkOut}`;
+            window.location.href = `/hotels.html?area=${encodeURIComponent(area)}&check_in=${checkIn}&check_out=${checkOut}`;
         });
     </script>
 </body>

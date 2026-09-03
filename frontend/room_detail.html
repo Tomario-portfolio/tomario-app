@@ -15,7 +15,7 @@
     </header>
     <main>
         <div class="container">
-            <a id="back-link" href="/rooms.html">&larr; 客室一覧に戻る</a>
+            <a id="back-link" href="/hotels.html">&larr; 客室一覧に戻る</a>
             <div id="room-detail" class="room-detail"></div>
         </div>
     </main>
@@ -29,15 +29,17 @@
         const checkIn = params.check_in || '';
         const checkOut = params.check_out || '';
 
-        document.getElementById('back-link').href =
-            `/rooms.html?check_in=${checkIn}&check_out=${checkOut}`;
-
         (async () => {
             const data = await apiRequest('GET', `/rooms/${roomId}`);
             const room = data.room;
-            document.title = `${room.room_type}（${room.room_number}号室）- Tomario Hotel`;
+
+            document.getElementById('back-link').href =
+                `/rooms.html?hotel_id=${room.hotel_id}&check_in=${checkIn}&check_out=${checkOut}`;
+
+            document.title = `${room.room_type}（${room.room_number}号室）- ${room.hotel_name}`;
             document.getElementById('room-detail').innerHTML = `
                 <img src="${room.image_url || 'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=800&q=80'}" alt="${room.room_type}" class="room-detail-img">
+                <p class="hotel-breadcrumb">${room.hotel_name}</p>
                 <h2>${room.room_type}（${room.room_number}号室）</h2>
                 <table class="detail-table">
                     <tr><th>定員</th><td>${room.capacity}名</td></tr>

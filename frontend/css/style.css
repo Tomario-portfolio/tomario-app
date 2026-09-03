@@ -185,6 +185,7 @@ main {
 .room-info .btn { margin-top: 0.8rem; }
 
 .room-detail h2 { margin-bottom: 1.5rem; }
+.hotel-breadcrumb { color: #3498db; font-size: 0.9rem; font-weight: 500; margin-bottom: 0.3rem; }
 
 .detail-table { width: 100%; border-collapse: collapse; margin-bottom: 1.5rem; }
 .detail-table th, .detail-table td {

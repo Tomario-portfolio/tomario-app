@@ -43,10 +43,33 @@ class User(UserMixin, db.Model):
         return {'id': self.id, 'username': self.username, 'email': self.email}
 
 
+class Hotel(db.Model):
+    __tablename__ = 'hotels'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    area = db.Column(db.String(50), nullable=False)
+    address = db.Column(db.String(255))
+    description = db.Column(db.Text)
+    image_url = db.Column(db.String(255))
+    rooms = db.relationship('Room', backref='hotel', lazy=True)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'area': self.area,
+            'address': self.address,
+            'description': self.description,
+            'image_url': self.image_url,
+        }
+
+
 class Room(db.Model):
     __tablename__ = 'rooms'
+    __table_args__ = (db.UniqueConstraint('hotel_id', 'room_number', name='uq_hotel_room_number'),)
     id = db.Column(db.Integer, primary_key=True)
-    room_number = db.Column(db.String(10), unique=True, nullable=False)
+    hotel_id = db.Column(db.Integer, db.ForeignKey('hotels.id'), nullable=False)
+    room_number = db.Column(db.String(10), nullable=False)
     room_type = db.Column(db.String(50), nullable=False)
     price_per_night = db.Column(db.Numeric(10, 2), nullable=False)
     capacity = db.Column(db.Integer, nullable=False)
@@ -56,6 +79,8 @@ class Room(db.Model):
     def to_dict(self):
         return {
             'id': self.id,
+            'hotel_id': self.hotel_id,
+            'hotel_name': self.hotel.name if self.hotel else None,
             'room_number': self.room_number,
             'room_type': self.room_type,
             'price_per_night': float(self.price_per_night),
@@ -168,13 +193,64 @@ def me():
 
 
 # ------------------------------------------------------------
+# Hotels
+# ------------------------------------------------------------
+
+@app.route('/api/hotels')
+def hotels():
+    area = request.args.get('area', '').strip()
+    check_in = request.args.get('check_in')
+    check_out = request.args.get('check_out')
+
+    query = Hotel.query
+    if area:
+        query = query.filter(Hotel.area.like(f'%{area}%'))
+    hotel_list = query.all()
+
+    result = []
+    for hotel in hotel_list:
+        rooms_in_hotel = hotel.rooms
+        if check_in and check_out:
+            check_in_date = date.fromisoformat(check_in)
+            check_out_date = date.fromisoformat(check_out)
+            booked_room_ids = {
+                room_id for (room_id,) in db.session.query(Booking.room_id).filter(
+                    Booking.status == 'confirmed',
+                    Booking.check_in_date < check_out_date,
+                    Booking.check_out_date > check_in_date
+                )
+            }
+            rooms_in_hotel = [r for r in rooms_in_hotel if r.id not in booked_room_ids]
+
+        hotel_dict = hotel.to_dict()
+        hotel_dict['available_room_count'] = len(rooms_in_hotel)
+        hotel_dict['min_price_per_night'] = (
+            min(float(r.price_per_night) for r in rooms_in_hotel) if rooms_in_hotel else None
+        )
+        result.append(hotel_dict)
+
+    return jsonify({'hotels': result})
+
+
+@app.route('/api/hotels/<int:hotel_id>')
+def hotel_detail(hotel_id):
+    hotel = db.get_or_404(Hotel, hotel_id)
+    return jsonify({'hotel': hotel.to_dict()})
+
+
+# ------------------------------------------------------------
 # Rooms
 # ------------------------------------------------------------
 
 @app.route('/api/rooms')
 def rooms():
+    hotel_id = request.args.get('hotel_id')
     check_in = request.args.get('check_in')
     check_out = request.args.get('check_out')
+
+    query = Room.query
+    if hotel_id:
+        query = query.filter(Room.hotel_id == int(hotel_id))
 
     if check_in and check_out:
         check_in_date = date.fromisoformat(check_in)
@@ -184,9 +260,9 @@ def rooms():
             Booking.check_in_date < check_out_date,
             Booking.check_out_date > check_in_date
         ).subquery()
-        available_rooms = Room.query.filter(~Room.id.in_(booked_room_ids)).all()
+        available_rooms = query.filter(~Room.id.in_(booked_room_ids)).all()
     else:
-        available_rooms = Room.query.all()
+        available_rooms = query.all()
 
     return jsonify({'rooms': [r.to_dict() for r in available_rooms]})
 
@@ -281,32 +357,52 @@ def cancel_booking(booking_id):
     })
 
 
-def seed_rooms():
-    if Room.query.count() == 0:
-        rooms = [
-            Room(room_number='101', room_type='シングル', price_per_night=8000, capacity=1,
-                 description='落ち着いた雰囲気のシングルルームです。',
-                 image_url='https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=800&q=80'),
-            Room(room_number='102', room_type='シングル', price_per_night=8000, capacity=1,
-                 description='落ち着いた雰囲気のシングルルームです。',
-                 image_url='https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=800&q=80'),
-            Room(room_number='201', room_type='ダブル', price_per_night=12000, capacity=2,
-                 description='ゆったりとしたダブルルームです。',
-                 image_url='https://images.unsplash.com/photo-1582719508461-905c673771fd?w=800&q=80'),
-            Room(room_number='202', room_type='ダブル', price_per_night=12000, capacity=2,
-                 description='ゆったりとしたダブルルームです。',
-                 image_url='https://images.unsplash.com/photo-1582719508461-905c673771fd?w=800&q=80'),
-            Room(room_number='301', room_type='スイート', price_per_night=25000, capacity=3,
-                 description='豪華なスイートルームです。特別なひとときをお過ごしください。',
-                 image_url='https://images.unsplash.com/photo-1578683010236-d716f9a3f461?w=800&q=80'),
-        ]
-        db.session.add_all(rooms)
-        db.session.commit()
+def seed_hotels_and_rooms():
+    if Hotel.query.count() > 0:
+        return
+
+    tokyo = Hotel(name='Tomario Hotel 東京', area='東京', address='東京都千代田区丸の内1-1-1',
+                  description='都心の主要駅から徒歩圏内、ビジネスにも観光にも便利なホテルです。',
+                  image_url='https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&q=80')
+    kyoto = Hotel(name='Tomario Hotel 京都', area='京都', address='京都府京都市東山区清水1-1-1',
+                  description='古都の風情を感じられる、落ち着いた雰囲気のホテルです。',
+                  image_url='https://images.unsplash.com/photo-1545158535-c3f7168c28b6?w=800&q=80')
+    osaka = Hotel(name='Tomario Hotel 大阪', area='大阪', address='大阪府大阪市中央区難波1-1-1',
+                  description='繁華街に近く、食とショッピングを楽しむのに最適なホテルです。',
+                  image_url='https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=800&q=80')
+    db.session.add_all([tokyo, kyoto, osaka])
+    db.session.flush()  # id採番のためcommit前にflush
+
+    rooms = [
+        Room(hotel_id=tokyo.id, room_number='101', room_type='シングル', price_per_night=8000, capacity=1,
+             description='落ち着いた雰囲気のシングルルームです。',
+             image_url='https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=800&q=80'),
+        Room(hotel_id=tokyo.id, room_number='102', room_type='シングル', price_per_night=8000, capacity=1,
+             description='落ち着いた雰囲気のシングルルームです。',
+             image_url='https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=800&q=80'),
+        Room(hotel_id=tokyo.id, room_number='201', room_type='ダブル', price_per_night=12000, capacity=2,
+             description='ゆったりとしたダブルルームです。',
+             image_url='https://images.unsplash.com/photo-1582719508461-905c673771fd?w=800&q=80'),
+        Room(hotel_id=kyoto.id, room_number='101', room_type='シングル', price_per_night=7500, capacity=1,
+             description='和の趣を感じるシングルルームです。',
+             image_url='https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=800&q=80'),
+        Room(hotel_id=kyoto.id, room_number='202', room_type='ダブル', price_per_night=13000, capacity=2,
+             description='庭園を望むダブルルームです。',
+             image_url='https://images.unsplash.com/photo-1582719508461-905c673771fd?w=800&q=80'),
+        Room(hotel_id=osaka.id, room_number='101', room_type='シングル', price_per_night=7000, capacity=1,
+             description='アクセス抜群のシングルルームです。',
+             image_url='https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=800&q=80'),
+        Room(hotel_id=osaka.id, room_number='301', room_type='スイート', price_per_night=22000, capacity=3,
+             description='豪華なスイートルームです。特別なひとときをお過ごしください。',
+             image_url='https://images.unsplash.com/photo-1578683010236-d716f9a3f461?w=800&q=80'),
+    ]
+    db.session.add_all(rooms)
+    db.session.commit()
 
 
 with app.app_context():
     db.create_all()
-    seed_rooms()
+    seed_hotels_and_rooms()
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080)
