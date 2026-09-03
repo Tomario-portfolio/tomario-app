@@ -216,11 +216,28 @@ jobs:
           cluster: tomario-production-cluster
           wait-for-service-stability: true
 
-      - name: Sync frontend to S3 (production)
+  deploy-frontend-production:
+    name: Deploy Frontend to production
+    runs-on: ubuntu-latest
+    # backend(promote-to-production)とは完全に独立したジョブ。S3/CloudFrontはECSデプロイの成否に
+    # 関知しないため、一方の失敗がもう一方を巻き込まないようジョブ自体を分離している
+    environment: prod
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Sync frontend to S3
         run: |
           aws s3 sync frontend/ s3://tomario-production-frontend/ --delete
 
-      - name: Invalidate CloudFront cache (production)
+      - name: Invalidate CloudFront cache
         run: |
           aws cloudfront create-invalidation --distribution-id E16RCKYF5065BQ --paths "/*"
 
