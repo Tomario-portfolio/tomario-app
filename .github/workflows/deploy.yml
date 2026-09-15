@@ -106,8 +106,16 @@ jobs:
       - name: Download current task definition
         if: steps.check-service.outputs.exists == 'true'
         run: |
+          # ファミリー名だけを指定すると最新リビジョンを拾ってしまい、サービスが
+          # 実際に使っていないリビジョン（手動テスト等で登録されたもの）を誤って
+          # 引き継ぐ恐れがある。サービスが現在使っているリビジョンを明示的に指定する
+          CURRENT_TASK_DEF=$(aws ecs describe-services \
+            --cluster tomario-${{ matrix.env }}-cluster \
+            --services tomario-${{ matrix.env }}-service \
+            --query "services[0].taskDefinition" \
+            --output text)
           aws ecs describe-task-definition \
-            --task-definition tomario-${{ matrix.env }}-task \
+            --task-definition "$CURRENT_TASK_DEF" \
             --query taskDefinition \
             --output json > task-def.json
 
@@ -193,8 +201,16 @@ jobs:
       - name: Download current production task definition
         if: steps.check-service.outputs.exists == 'true'
         run: |
+          # ファミリー名だけを指定すると最新リビジョンを拾ってしまい、サービスが
+          # 実際に使っていないリビジョン（手動テスト等で登録されたもの）を誤って
+          # 引き継ぐ恐れがある。サービスが現在使っているリビジョンを明示的に指定する
+          CURRENT_TASK_DEF=$(aws ecs describe-services \
+            --cluster tomario-production-cluster \
+            --services tomario-production-service \
+            --query "services[0].taskDefinition" \
+            --output text)
           aws ecs describe-task-definition \
-            --task-definition tomario-production-task \
+            --task-definition "$CURRENT_TASK_DEF" \
             --query taskDefinition \
             --output json > task-def.json
 
