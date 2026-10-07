@@ -85,6 +85,10 @@ jobs:
           severity: CRITICAL,HIGH
           ignore-unfixed: true
           exit-code: "1"
+        env:
+          # イメージはECS（Graviton）向けにarm64のみでビルドしている。ランナー（amd64）と同じ
+          # プラットフォームを探しに行くと「no child with platform linux/amd64」で失敗するため明示する
+          TRIVY_PLATFORM: linux/arm64
 
   deploy:
     name: Deploy to ${{ matrix.env }}
