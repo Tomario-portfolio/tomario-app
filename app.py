@@ -11,6 +11,11 @@ load_dotenv()
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
+# SECRET_KEYの自動ローテーション（90日ごと）でログイン中のセッションが切れないよう、
+# 1つ前の鍵で署名されたcookieも受け付ける（Flask 3.1以降のSECRET_KEY_FALLBACKS）。
+# 新しく発行するcookieは常に現在の鍵（SECRET_KEY）で署名される
+if os.environ.get('SECRET_KEY_PREVIOUS'):
+    app.config['SECRET_KEY_FALLBACKS'] = [os.environ['SECRET_KEY_PREVIOUS']]
 app.config['SQLALCHEMY_DATABASE_URI'] = (
     f"mysql+pymysql://{os.environ.get('DB_USER')}:{os.environ.get('DB_PASSWORD')}"
     f"@{os.environ.get('DB_HOST')}:{os.environ.get('DB_PORT', '3306')}/{os.environ.get('DB_NAME')}"
