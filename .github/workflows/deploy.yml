@@ -72,6 +72,20 @@ jobs:
             --output text)
           echo "digest=$DIGEST" >> $GITHUB_OUTPUT
 
+      # ビルドしたイメージの脆弱性スキャン（OSパッケージ・Pythonの依存の両方）。
+      # 修正版が存在するCRITICAL/HIGHが見つかったらジョブを失敗させ、後続のdeploy・promoteを止める。
+      # 修正版の無い脆弱性はignore-unfixedで除外する（対応しようがないものでデプロイが止まり続けないように）。
+      # 方針はtomario-steeringのADR（adr/apps/001-dependency-vulnerability-scanning.md）を参照
+      - name: Scan image with Trivy
+        # タグの付け替えによる差し替えを防ぐため、コミットSHAで固定する
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}@${{ steps.build.outputs.digest }}
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+
   deploy:
     name: Deploy to ${{ matrix.env }}
     needs: build-and-push
