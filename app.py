@@ -307,6 +307,11 @@ def create_booking():
     check_in_date = date.fromisoformat(check_in)
     check_out_date = date.fromisoformat(check_out)
 
+    # 画面側でも過去日を選べないようにしているが、URLパラメータで日付が入った場合や
+    # APIを直接呼ばれた場合に備えてサーバー側でも検証する
+    if check_in_date < date.today():
+        return jsonify({'error': 'チェックイン日は今日以降の日付を指定してください'}), 400
+
     if check_in_date >= check_out_date:
         return jsonify({'error': 'チェックアウト日はチェックイン日より後にしてください'}), 400
 
