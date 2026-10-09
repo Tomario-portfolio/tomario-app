@@ -29,17 +29,21 @@
                 </div>
                 <div class="form-group">
                     <label for="password">パスワード</label>
-                    <input type="password" id="password" required>
+                    <input type="password" id="password" minlength="8" placeholder="8文字以上" required>
                 </div>
                 <button type="submit" class="btn">登録する</button>
             </form>
-            <p>既にアカウントをお持ちの方は<a href="/login.html">こちら</a></p>
+            <p>既にアカウントをお持ちの方は<a href="/login.html" id="login-link">こちら</a></p>
         </div>
     </main>
     <footer><p>&copy; 2024 Tomario. All rights reserved.</p></footer>
     <script src="/js/api.js"></script>
     <script>
         renderNav();
+        // ログイン画面から渡された redirect を、登録完了後のログイン画面へ引き継ぐ
+        const { redirect } = getParams();
+        const loginUrl = redirect ? '/login.html?redirect=' + encodeURIComponent(redirect) : '/login.html';
+        document.getElementById('login-link').href = loginUrl;
         document.getElementById('register-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             try {
@@ -48,7 +52,7 @@
                     email: document.getElementById('email').value,
                     password: document.getElementById('password').value,
                 });
-                window.location.href = '/login.html';
+                window.location.href = loginUrl;
             } catch (err) {
                 showError(err.message);
             }

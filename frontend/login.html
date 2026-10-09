@@ -29,13 +29,18 @@
                 </div>
                 <button type="submit" class="btn">ログイン</button>
             </form>
-            <p>アカウントをお持ちでない方は<a href="/register.html">こちら</a></p>
+            <p>アカウントをお持ちでない方は<a href="/register.html" id="register-link">こちら</a></p>
         </div>
     </main>
     <footer><p>&copy; 2024 Tomario. All rights reserved.</p></footer>
     <script src="/js/api.js"></script>
     <script>
         renderNav();
+        // 会員登録を挟んでも、登録・ログイン後に元の画面へ戻れるよう redirect を引き継ぐ
+        const { redirect } = getParams();
+        if (redirect) {
+            document.getElementById('register-link').href = '/register.html?redirect=' + encodeURIComponent(redirect);
+        }
         document.getElementById('login-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             try {
@@ -43,8 +48,7 @@
                     email: document.getElementById('email').value,
                     password: document.getElementById('password').value,
                 });
-                const params = getParams();
-                window.location.href = params.redirect || '/index.html';
+                window.location.href = redirect || '/index.html';
             } catch (err) {
                 showError(err.message);
             }

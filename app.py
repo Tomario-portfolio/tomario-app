@@ -154,6 +154,8 @@ def register():
 
     if not username or not email or not password:
         return jsonify({'error': '全項目を入力してください'}), 400
+    if len(password) < 8:
+        return jsonify({'error': 'パスワードは8文字以上で入力してください'}), 400
     if User.query.filter_by(email=email).first():
         return jsonify({'error': 'そのメールアドレスは既に登録されています'}), 400
     if User.query.filter_by(username=username).first():
