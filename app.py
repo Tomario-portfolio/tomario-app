@@ -6,6 +6,10 @@ from flask_login import LoginManager, UserMixin, login_user, logout_user, login_
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+
+from seed_data import HOTELS, REGIONS, ROOM_TYPES
 
 load_dotenv()
 
@@ -203,16 +207,24 @@ def me():
 # Hotels
 # ------------------------------------------------------------
 
+@app.route('/api/regions')
+def regions():
+    return jsonify({'regions': [{'name': name, 'prefectures': prefs} for name, prefs in REGIONS.items()]})
+
+
 @app.route('/api/hotels')
 def hotels():
+    region = request.args.get('region', '').strip()
     area = request.args.get('area', '').strip()
     check_in = request.args.get('check_in')
     check_out = request.args.get('check_out')
 
     query = Hotel.query
+    if region in REGIONS:
+        query = query.filter(Hotel.area.in_(REGIONS[region]))
     if area:
         query = query.filter(Hotel.area.like(f'%{area}%'))
-    hotel_list = query.all()
+    hotel_list = query.order_by(Hotel.id).all()
 
     result = []
     for hotel in hotel_list:
@@ -370,46 +382,41 @@ def cancel_booking(booking_id):
 
 
 def seed_hotels_and_rooms():
-    if Hotel.query.count() > 0:
-        return
+    """seed_data.py のホテル・部屋のうち、DBに無いものだけを追加する。
 
-    tokyo = Hotel(name='丸の内グランドホテル', area='東京', address='東京都千代田区丸の内1-1-1',
-                  description='都心の主要駅から徒歩圏内、ビジネスにも観光にも便利なホテルです。',
-                  image_url='https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&q=80')
-    kyoto = Hotel(name='京都東山旅館', area='京都', address='京都府京都市東山区清水1-1-1',
-                  description='古都の風情を感じられる、落ち着いた雰囲気のホテルです。',
-                  image_url='https://images.unsplash.com/photo-1545158535-c3f7168c28b6?w=800&q=80')
-    osaka = Hotel(name='なんばグランドホテル', area='大阪', address='大阪府大阪市中央区難波1-1-1',
-                  description='繁華街に近く、食とショッピングを楽しむのに最適なホテルです。',
-                  image_url='https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=800&q=80')
-    db.session.add_all([tokyo, kyoto, osaka])
-    db.session.flush()  # id採番のためcommit前にflush
+    既に稼働している環境（予約データあり）にも追加分だけが入るよう、何度実行しても同じ結果になる形にしている。
+    gunicorn のワーカー・ECS タスクが同時に起動しても二重に追加しないよう、MySQL ではロックを取ってから実行する。
+    """
+    with db.engine.connect() as conn:
+        use_lock = conn.dialect.name == 'mysql'
+        if use_lock:
+            conn.execute(text("SELECT GET_LOCK('tomario_seed', 60)"))
+        try:
+            with Session(bind=conn) as session:
+                hotels_by_name = {h.name: h for h in session.query(Hotel).all()}
+                for name, area, address, description, prices, image_url in HOTELS:
+                    hotel = hotels_by_name.get(name)
+                    if hotel is None:
+                        hotel = Hotel(name=name, area=area, address=address,
+                                      description=description, image_url=image_url)
+                        session.add(hotel)
+                        session.flush()  # id採番のため
+                    elif hotel.area != area:
+                        hotel.area = area  # 以前の「東京」等を都道府県名にそろえる
 
-    rooms = [
-        Room(hotel_id=tokyo.id, room_number='101', room_type='シングル', price_per_night=8000, capacity=1,
-             description='落ち着いた雰囲気のシングルルームです。',
-             image_url='https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=800&q=80'),
-        Room(hotel_id=tokyo.id, room_number='102', room_type='シングル', price_per_night=8000, capacity=1,
-             description='落ち着いた雰囲気のシングルルームです。',
-             image_url='https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=800&q=80'),
-        Room(hotel_id=tokyo.id, room_number='201', room_type='ダブル', price_per_night=12000, capacity=2,
-             description='ゆったりとしたダブルルームです。',
-             image_url='https://images.unsplash.com/photo-1582719508461-905c673771fd?w=800&q=80'),
-        Room(hotel_id=kyoto.id, room_number='101', room_type='シングル', price_per_night=7500, capacity=1,
-             description='和の趣を感じるシングルルームです。',
-             image_url='https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=800&q=80'),
-        Room(hotel_id=kyoto.id, room_number='202', room_type='ダブル', price_per_night=13000, capacity=2,
-             description='庭園を望むダブルルームです。',
-             image_url='https://images.unsplash.com/photo-1582719508461-905c673771fd?w=800&q=80'),
-        Room(hotel_id=osaka.id, room_number='101', room_type='シングル', price_per_night=7000, capacity=1,
-             description='アクセス抜群のシングルルームです。',
-             image_url='https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=800&q=80'),
-        Room(hotel_id=osaka.id, room_number='301', room_type='スイート', price_per_night=22000, capacity=3,
-             description='豪華なスイートルームです。特別なひとときをお過ごしください。',
-             image_url='https://images.unsplash.com/photo-1578683010236-d716f9a3f461?w=800&q=80'),
-    ]
-    db.session.add_all(rooms)
-    db.session.commit()
+                    existing_numbers = {r.room_number for r in hotel.rooms}
+                    for (room_type, numbers, capacity, room_description, room_image), price in zip(ROOM_TYPES, prices):
+                        for number in numbers:
+                            if number not in existing_numbers:
+                                session.add(Room(hotel_id=hotel.id, room_number=number, room_type=room_type,
+                                                 price_per_night=price, capacity=capacity,
+                                                 description=room_description, image_url=room_image))
+                session.commit()
+            conn.commit()
+        finally:
+            if use_lock:
+                conn.execute(text("SELECT RELEASE_LOCK('tomario_seed')"))
+                conn.commit()
 
 
 with app.app_context():

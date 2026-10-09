@@ -53,6 +53,25 @@ async function renderNav() {
     }
 }
 
+// 地方 → 都道府県の2段階プルダウン。都道府県は地方を選んだあとに選べるようになる
+async function setupAreaSelects(regionSelect, areaSelect, selectedRegion = '', selectedArea = '') {
+    const { regions } = await apiRequest('GET', '/regions');
+    regionSelect.innerHTML = '<option value="">すべての地方</option>'
+        + regions.map(r => `<option value="${r.name}">${r.name}</option>`).join('');
+
+    const renderAreas = () => {
+        const region = regions.find(r => r.name === regionSelect.value);
+        areaSelect.innerHTML = '<option value="">すべての都道府県</option>'
+            + (region ? region.prefectures.map(p => `<option value="${p}">${p}</option>`).join('') : '');
+        areaSelect.disabled = !region;
+    };
+    regionSelect.addEventListener('change', renderAreas);
+
+    regionSelect.value = selectedRegion;
+    renderAreas();
+    areaSelect.value = selectedArea;
+}
+
 function showError(msg) {
     const el = document.getElementById('error-msg');
     if (el) { el.textContent = msg; el.style.display = 'block'; }

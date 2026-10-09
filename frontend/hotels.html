@@ -19,8 +19,12 @@
             <h2>ホテルを探す</h2>
             <form class="search-form inline" id="search-form">
                 <div class="form-group">
-                    <label for="area">エリア</label>
-                    <input type="text" id="area" placeholder="例：京都">
+                    <label for="region">地方</label>
+                    <select id="region"></select>
+                </div>
+                <div class="form-group">
+                    <label for="area">都道府県</label>
+                    <select id="area" disabled></select>
                 </div>
                 <div class="form-group">
                     <label for="check_in">チェックイン</label>
@@ -44,24 +48,27 @@
         renderNav();
 
         const params = getParams();
+        const region = params.region || '';
         const area = params.area || '';
         const checkIn = params.check_in || '';
         const checkOut = params.check_out || '';
 
-        if (area) document.getElementById('area').value = area;
+        setupAreaSelects(document.getElementById('region'), document.getElementById('area'), region, area);
         if (checkIn) document.getElementById('check_in').value = checkIn;
         if (checkOut) document.getElementById('check_out').value = checkOut;
 
         document.getElementById('search-form').addEventListener('submit', (e) => {
             e.preventDefault();
+            const r = document.getElementById('region').value;
             const a = document.getElementById('area').value;
             const ci = document.getElementById('check_in').value;
             const co = document.getElementById('check_out').value;
-            window.location.href = `/hotels.html?area=${encodeURIComponent(a)}&check_in=${ci}&check_out=${co}`;
+            window.location.href = `/hotels.html?region=${encodeURIComponent(r)}&area=${encodeURIComponent(a)}&check_in=${ci}&check_out=${co}`;
         });
 
         (async () => {
             const query = new URLSearchParams();
+            if (region) query.set('region', region);
             if (area) query.set('area', area);
             if (checkIn && checkOut) {
                 query.set('check_in', checkIn);

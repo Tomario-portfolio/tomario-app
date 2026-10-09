@@ -35,6 +35,7 @@ CloudFront
 tomario-app/
 ├── app.py              # Flask REST API（ルーティング・DBモデル・ビジネスロジック）
 ├── requirements.txt    # Python 依存パッケージ
+├── seed_data.py        # ホテル・部屋の初期データ（47都道府県）と地方→都道府県の対応表
 ├── schema.sql          # DB テーブル定義・初期データ
 └── frontend/           # S3 にアップロードする静的ファイル
     ├── index.html          # トップページ

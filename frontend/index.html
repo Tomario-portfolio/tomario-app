@@ -24,8 +24,12 @@
             <h2>ホテルを検索</h2>
             <form class="search-form" id="search-form">
                 <div class="form-group">
-                    <label for="area">エリア</label>
-                    <input type="text" id="area" placeholder="例：京都">
+                    <label for="region">地方</label>
+                    <select id="region"></select>
+                </div>
+                <div class="form-group">
+                    <label for="area">都道府県</label>
+                    <select id="area" disabled></select>
                 </div>
                 <div class="form-group">
                     <label for="check_in">チェックイン</label>
@@ -44,12 +48,14 @@
     <script src="/js/main.js"></script>
     <script>
         renderNav();
+        setupAreaSelects(document.getElementById('region'), document.getElementById('area'));
         document.getElementById('search-form').addEventListener('submit', (e) => {
             e.preventDefault();
+            const region = document.getElementById('region').value;
             const area = document.getElementById('area').value;
             const checkIn = document.getElementById('check_in').value;
             const checkOut = document.getElementById('check_out').value;
-            window.location.href = `/hotels.html?area=${encodeURIComponent(area)}&check_in=${checkIn}&check_out=${checkOut}`;
+            window.location.href = `/hotels.html?region=${encodeURIComponent(region)}&area=${encodeURIComponent(area)}&check_in=${checkIn}&check_out=${checkOut}`;
         });
     </script>
 </body>
