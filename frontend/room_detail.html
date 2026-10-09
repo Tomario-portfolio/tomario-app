@@ -26,28 +26,37 @@
         renderNav();
 
         const params = getParams();
-        const roomId = params.room_id;
+        const hotelId = params.hotel_id;
+        const roomType = params.room_type;
         const checkIn = params.check_in || '';
         const checkOut = params.check_out || '';
 
         (async () => {
-            const data = await apiRequest('GET', `/rooms/${roomId}`);
-            const room = data.room;
+            const hasDates = Boolean(checkIn && checkOut);
+            const query = hasDates ? `?check_in=${checkIn}&check_out=${checkOut}` : '';
+            const data = await apiRequest('GET', `/hotels/${hotelId}/room-types${query}`);
+            const room = data.room_types.find(t => t.room_type === roomType);
 
             document.getElementById('back-link').href =
-                `/rooms.html?hotel_id=${room.hotel_id}&check_in=${checkIn}&check_out=${checkOut}`;
+                `/rooms.html?hotel_id=${hotelId}&check_in=${checkIn}&check_out=${checkOut}`;
 
-            document.title = `${room.room_type}（${room.room_number}号室）- ${room.hotel_name}`;
+            if (!room) {
+                document.getElementById('room-detail').innerHTML = '<p>部屋が見つかりませんでした。</p>';
+                return;
+            }
+
+            document.title = `${room.room_type} - ${data.hotel.name}`;
             document.getElementById('room-detail').innerHTML = `
                 <img src="${room.image_url || 'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=800&q=80'}" alt="${room.room_type}" class="room-detail-img">
-                <p class="hotel-breadcrumb">${room.hotel_name}</p>
-                <h2>${room.room_type}（${room.room_number}号室）</h2>
+                <p class="hotel-breadcrumb">${data.hotel.name}</p>
+                <h2>${room.room_type}</h2>
                 <table class="detail-table">
                     <tr><th>定員</th><td>${room.capacity}名</td></tr>
                     <tr><th>料金</th><td>¥${room.price_per_night.toLocaleString()} / 泊</td></tr>
+                    <tr><th>空き</th><td>${hasDates ? `${room.available_rooms}室` : `全${room.total_rooms}室`}</td></tr>
                     <tr><th>説明</th><td>${room.description || '-'}</td></tr>
                 </table>
-                <a href="/booking.html?room_id=${room.id}&check_in=${checkIn}&check_out=${checkOut}" class="btn">この部屋を予約する</a>
+                <a href="/booking.html?hotel_id=${hotelId}&room_type=${encodeURIComponent(room.room_type)}&check_in=${checkIn}&check_out=${checkOut}" class="btn">この部屋を予約する</a>
             `;
         })();
     </script>

@@ -274,6 +274,47 @@ def rooms():
     return jsonify({'rooms': [r.to_dict() for r in available_rooms]})
 
 
+def booked_room_ids(check_in_date, check_out_date):
+    """指定した期間に確定済みの予約が入っている部屋のID"""
+    return {
+        room_id for (room_id,) in db.session.query(Booking.room_id).filter(
+            Booking.status == 'confirmed',
+            Booking.check_in_date < check_out_date,
+            Booking.check_out_date > check_in_date
+        )
+    }
+
+
+@app.route('/api/hotels/<int:hotel_id>/room-types')
+def room_types(hotel_id):
+    """ホテルの部屋を種類ごとにまとめて返す。日付を指定すると、その期間の空き室数も返す"""
+    hotel = db.get_or_404(Hotel, hotel_id)
+    check_in = request.args.get('check_in')
+    check_out = request.args.get('check_out')
+    booked = (booked_room_ids(date.fromisoformat(check_in), date.fromisoformat(check_out))
+              if check_in and check_out else set())
+
+    types = {}
+    for room in sorted(hotel.rooms, key=lambda r: r.id):
+        t = types.setdefault(room.room_type, {
+            'room_type': room.room_type,
+            'price_per_night': float(room.price_per_night),
+            'capacity': room.capacity,
+            'description': room.description,
+            'image_url': room.image_url,
+            'total_rooms': 0,
+            'available_rooms': 0,
+        })
+        t['total_rooms'] += 1
+        if room.id not in booked:
+            t['available_rooms'] += 1
+
+    return jsonify({
+        'hotel': hotel.to_dict(),
+        'room_types': sorted(types.values(), key=lambda t: t['price_per_night']),
+    })
+
+
 @app.route('/api/rooms/<int:room_id>')
 def room_detail(room_id):
     room = db.get_or_404(Room, room_id)
@@ -298,14 +339,17 @@ def create_booking():
     if not data:
         return jsonify({'error': 'リクエストが不正です'}), 400
 
+    # 画面からは「ホテル＋部屋の種類」で予約し、空いている部屋をサーバー側で1つ選ぶ。
+    # 部屋を直接指定する room_id も、負荷試験・障害試験のスクリプト用に引き続き受け付ける
     room_id = data.get('room_id')
+    hotel_id = data.get('hotel_id')
+    room_type = data.get('room_type')
     check_in = data.get('check_in')
     check_out = data.get('check_out')
 
-    if not room_id or not check_in or not check_out:
+    if not (room_id or (hotel_id and room_type)) or not check_in or not check_out:
         return jsonify({'error': '全項目を入力してください'}), 400
 
-    room = db.get_or_404(Room, room_id)
     check_in_date = date.fromisoformat(check_in)
     check_out_date = date.fromisoformat(check_out)
 
@@ -317,6 +361,17 @@ def create_booking():
     if check_in_date >= check_out_date:
         return jsonify({'error': 'チェックアウト日はチェックイン日より後にしてください'}), 400
 
+    if not room_id:
+        booked = booked_room_ids(check_in_date, check_out_date)
+        candidates = Room.query.filter_by(hotel_id=hotel_id, room_type=room_type).order_by(Room.id).all()
+        if not candidates:
+            return jsonify({'error': '指定された部屋が見つかりません'}), 404
+        free = [r for r in candidates if r.id not in booked]
+        if not free:
+            return jsonify({'error': 'その期間は空室がありません'}), 400
+        room_id = free[0].id
+
+    room = db.get_or_404(Room, room_id)
     conflict = Booking.query.filter(
         Booking.room_id == room_id,
         Booking.status == 'confirmed',

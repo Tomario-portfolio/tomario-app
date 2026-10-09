@@ -60,33 +60,35 @@
                 return;
             }
 
-            const hotelData = await apiRequest('GET', `/hotels/${hotelId}`);
-            document.getElementById('hotel-heading').textContent = `${hotelData.hotel.name}の客室一覧`;
-            document.title = `${hotelData.hotel.name} - Tomario`;
-
-            const query = checkIn && checkOut ? `&check_in=${checkIn}&check_out=${checkOut}` : '';
-            const data = await apiRequest('GET', `/rooms?hotel_id=${hotelId}${query}`);
+            const hasDates = Boolean(checkIn && checkOut);
+            const query = hasDates ? `?check_in=${checkIn}&check_out=${checkOut}` : '';
+            const data = await apiRequest('GET', `/hotels/${hotelId}/room-types${query}`);
+            document.getElementById('hotel-heading').textContent = `${data.hotel.name}の客室一覧`;
+            document.title = `${data.hotel.name} - Tomario`;
             const grid = document.getElementById('rooms-grid');
 
-            if (checkIn && checkOut) {
+            // 日付を指定したときは、空きのある部屋の種類だけを表示する
+            const roomTypes = hasDates ? data.room_types.filter(t => t.available_rooms > 0) : data.room_types;
+            if (hasDates) {
                 document.getElementById('search-result').textContent =
-                    `${checkIn} 〜 ${checkOut} の空き部屋：${data.rooms.length}件`;
+                    `${checkIn} 〜 ${checkOut} の空き：${roomTypes.length}タイプ`;
             }
 
-            if (data.rooms.length === 0) {
+            if (roomTypes.length === 0) {
                 grid.innerHTML = '<p>空き部屋がありません。</p>';
                 return;
             }
 
-            grid.innerHTML = data.rooms.map(room => `
+            grid.innerHTML = roomTypes.map(t => `
                 <div class="room-card">
-                    <img src="${room.image_url || 'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=600&q=80'}" alt="${room.room_type}" class="room-img">
+                    <img src="${t.image_url || 'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=600&q=80'}" alt="${t.room_type}" class="room-img">
                     <div class="room-info">
-                        <h3>${room.room_type}（${room.room_number}号室）</h3>
-                        <p>定員：${room.capacity}名</p>
-                        <p class="price">¥${room.price_per_night.toLocaleString()} / 泊</p>
-                        <p>${room.description || ''}</p>
-                        <a href="/room_detail.html?room_id=${room.id}&check_in=${checkIn}&check_out=${checkOut}" class="btn">詳細を見る</a>
+                        <h3>${t.room_type}</h3>
+                        <p>定員：${t.capacity}名</p>
+                        <p class="price">¥${t.price_per_night.toLocaleString()} / 泊</p>
+                        <p>${hasDates ? `空き ${t.available_rooms}室` : `全${t.total_rooms}室`}</p>
+                        <p>${t.description || ''}</p>
+                        <a href="/room_detail.html?hotel_id=${hotelId}&room_type=${encodeURIComponent(t.room_type)}&check_in=${checkIn}&check_out=${checkOut}" class="btn">詳細を見る</a>
                     </div>
                 </div>
             `).join('');
