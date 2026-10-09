@@ -456,8 +456,10 @@ def seed_hotels_and_rooms():
                                       description=description, image_url=image_url)
                         session.add(hotel)
                         session.flush()  # id採番のため
-                    elif hotel.area != area:
-                        hotel.area = area  # 以前の「東京」等を都道府県名にそろえる
+                    else:
+                        # 既存のホテルも、エリア（以前の「東京」等）と写真を seed_data.py の内容にそろえる
+                        hotel.area = area
+                        hotel.image_url = image_url
 
                     existing_numbers = {r.room_number for r in hotel.rooms}
                     for (room_type, numbers, capacity, room_description, room_image), price in zip(ROOM_TYPES, prices):
